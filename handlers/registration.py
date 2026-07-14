@@ -360,58 +360,73 @@ async def get_selfie(
         bot: Bot
 ):
 
-    lang = await get_language(
-        message.from_user.id
-    )
+    try:
 
-    if not message.photo:
+        print("SELFIE START", message.from_user.id)
 
-        await message.answer(
-            TEXTS[lang]["selfie"]
+
+        lang = await get_language(
+            message.from_user.id
         )
 
-        return
+
+        if not message.photo:
+
+            await message.answer(
+                TEXTS[lang]["selfie"]
+            )
+
+            return
 
 
-    file_id = message.photo[-1].file_id
+        file_id = message.photo[-1].file_id
 
 
-    await save_selfie(
-        message.from_user.id,
-        file_id
-    )
-
-
-    await message.answer(
-        "⏳ جاري إرسال الطلب...",
-        reply_markup=main_menu(lang)
-    )
-
-
-    user = await get_user(
-        message.from_user.id
-    )
-
-
-    if not user:
-        await message.answer(
-            "❌ حدث خطأ. حاول مرة أخرى."
+        await save_selfie(
+            message.from_user.id,
+            file_id
         )
-        await state.clear()
-        return
+
+        print("SELFIE SAVED")
 
 
-    phone = user[4]
-    application_number = user[6]
+        await message.answer(
+            "⏳ جاري إرسال الطلب...",
+            reply_markup=main_menu(lang)
+        )
 
 
-    await set_status(
-        message.from_user.id,
-        "new"
-    )
+        user = await get_user(
+            message.from_user.id
+        )
 
 
-    caption = f"""
+        print("USER DATA:", user)
+
+
+        if not user:
+
+            await message.answer(
+                "❌ حدث خطأ. حاول مرة أخرى."
+            )
+
+            await state.clear()
+
+            return
+
+
+        phone = user[4]
+
+        application_number = user[6]
+
+
+        await set_status(
+            message.from_user.id,
+            "new"
+        )
+
+
+        caption = f"""
 📥 Новая заявка
 
 👤 {message.from_user.full_name}
@@ -424,42 +439,76 @@ async def get_selfie(
 """
 
 
-    for admin_id in ADMIN_IDS:
-
-        try:
-
-            await bot.send_photo(
-                admin_id,
-                user[9],
-                caption=caption
-            )
+        print("START SENDING ADMINS")
 
 
-            await bot.send_photo(
-                admin_id,
-                user[10]
-            )
+        for admin_id in ADMIN_IDS:
 
+            try:
 
-            await bot.send_photo(
-                admin_id,
-                user[11],
-                reply_markup=admin_keyboard(
-                    message.from_user.id
+                print(
+                    "SEND TO ADMIN:",
+                    admin_id
                 )
-            )
-
-        except Exception as e:
-
-            print(
-                f"Ошибка отправки админу {admin_id}: {e}"
-            )
 
 
-    await message.answer(
-        TEXTS[lang]["waiting"],
-        reply_markup=main_menu(lang)
-    )
+                await bot.send_photo(
+                    admin_id,
+                    user[9],
+                    caption=caption
+                )
 
 
-    await state.clear()
+                await bot.send_photo(
+                    admin_id,
+                    user[10]
+                )
+
+
+                await bot.send_photo(
+                    admin_id,
+                    user[11],
+                    reply_markup=admin_keyboard(
+                        message.from_user.id
+                    )
+                )
+
+
+                print(
+                    "ADMIN SENT:",
+                    admin_id
+                )
+
+
+            except Exception as e:
+
+                print(
+                    f"ADMIN ERROR {admin_id}: {repr(e)}"
+                )
+
+
+        await message.answer(
+            TEXTS[lang]["waiting"],
+            reply_markup=main_menu(lang)
+        )
+
+
+        await state.clear()
+
+
+        print("SELFIE FINISHED")
+
+
+    except Exception as e:
+
+        print(
+            "SELFIE GLOBAL ERROR:",
+            repr(e)
+        )
+
+
+        await message.answer(
+            "❌ حدث خطأ. حاول مرة أخرى."
+        )
+
+        await state.clear()
