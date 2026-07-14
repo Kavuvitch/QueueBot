@@ -372,25 +372,44 @@ async def get_selfie(
 
         return
 
+
     file_id = message.photo[-1].file_id
+
 
     await save_selfie(
         message.from_user.id,
         file_id
     )
 
+
+    await message.answer(
+        "⏳ جاري إرسال الطلب...",
+        reply_markup=main_menu(lang)
+    )
+
+
     user = await get_user(
         message.from_user.id
     )
 
-    phone = user[4]
 
+    if not user:
+        await message.answer(
+            "❌ حدث خطأ. حاول مرة أخرى."
+        )
+        await state.clear()
+        return
+
+
+    phone = user[4]
     application_number = user[6]
+
 
     await set_status(
         message.from_user.id,
         "new"
     )
+
 
     caption = f"""
 📥 Новая заявка
@@ -404,30 +423,43 @@ async def get_selfie(
 📄 Заявка № {application_number}
 """
 
+
     for admin_id in ADMIN_IDS:
-        await bot.send_photo(
-            admin_id,
-            user[9],
-            caption=caption
-        )
 
-        await bot.send_photo(
-            admin_id,
-            user[10]
-        )
+        try:
 
-        await bot.send_photo(
-            admin_id,
-            user[11],
-            reply_markup=admin_keyboard(
-                message.from_user.id
+            await bot.send_photo(
+                admin_id,
+                user[9],
+                caption=caption
             )
-        )
+
+
+            await bot.send_photo(
+                admin_id,
+                user[10]
+            )
+
+
+            await bot.send_photo(
+                admin_id,
+                user[11],
+                reply_markup=admin_keyboard(
+                    message.from_user.id
+                )
+            )
+
+        except Exception as e:
+
+            print(
+                f"Ошибка отправки админу {admin_id}: {e}"
+            )
+
 
     await message.answer(
         TEXTS[lang]["waiting"],
         reply_markup=main_menu(lang)
     )
 
-    await state.clear()
 
+    await state.clear()

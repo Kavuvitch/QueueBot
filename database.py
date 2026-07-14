@@ -126,14 +126,18 @@ async def get_user(user_id):
     async with aiosqlite.connect(DATABASE) as db:
 
         cursor = await db.execute(
-
             "SELECT * FROM users WHERE telegram_id=?",
-
             (user_id,)
-
         )
 
-        return await cursor.fetchone()
+        user = await cursor.fetchone()
+
+        print(
+            "GET USER:",
+            user
+        )
+
+        return user
 
 
 # ==========================
@@ -265,20 +269,24 @@ async def save_selfie(user_id, file_id):
 
     async with aiosqlite.connect(DATABASE) as db:
 
-        await db.execute(
-
-            "UPDATE users SET selfie_photo=? WHERE telegram_id=?",
-
+        cursor = await db.execute(
+            """
+            UPDATE users 
+            SET selfie_photo=? 
+            WHERE telegram_id=?
+            """,
             (
-
                 file_id,
                 user_id
-
             )
-
         )
 
         await db.commit()
+
+        print(
+            "SELFIE UPDATED:",
+            cursor.rowcount
+        )
 
 
 # ==========================
