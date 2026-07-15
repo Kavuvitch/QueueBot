@@ -16,6 +16,8 @@ async def init_db():
 
     global pool
 
+    print("DATABASE_URL =", DATABASE_URL)
+
     pool = await asyncpg.create_pool(
         DATABASE_URL
     )
@@ -50,6 +52,7 @@ async def init_db():
         )
         """)
 
+    print("Database initialized")
 
 # ==========================
 # Пользователь существует?
@@ -432,12 +435,3 @@ async def get_approved_users():
 
         return users
 
-async def init_db():
-
-    global pool
-
-    print("DATABASE_URL =", DATABASE_URL)
-
-    pool = await asyncpg.create_pool(
-        DATABASE_URL
-    )
