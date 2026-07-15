@@ -1,7 +1,12 @@
-import aiosqlite
+import asyncpg
+import os
 from datetime import datetime
 
-DATABASE = "users.db"
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+pool = None
+
 
 # ==========================
 # Создание базы
@@ -9,12 +14,18 @@ DATABASE = "users.db"
 
 async def init_db():
 
-    async with aiosqlite.connect(DATABASE) as db:
+    global pool
+
+    pool = await asyncpg.create_pool(
+        DATABASE_URL
+    )
+
+    async with pool.acquire() as db:
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS users(
 
-            telegram_id INTEGER PRIMARY KEY,
+            telegram_id BIGINT PRIMARY KEY,
 
             first_name TEXT,
             last_name TEXT,
@@ -39,8 +50,6 @@ async def init_db():
         )
         """)
 
-        await db.commit()
-
 
 # ==========================
 # Пользователь существует?
@@ -48,17 +57,18 @@ async def init_db():
 
 async def user_exists(user_id):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    async with pool.acquire() as db:
 
-        cursor = await db.execute(
-
-            "SELECT telegram_id FROM users WHERE telegram_id=?",
-
-            (user_id,)
-
+        user = await db.fetchrow(
+            """
+            SELECT telegram_id 
+            FROM users 
+            WHERE telegram_id=$1
+            """,
+            user_id
         )
 
-        return await cursor.fetchone()
+        return user
 
 
 # ==========================
@@ -67,40 +77,40 @@ async def user_exists(user_id):
 
 async def create_user(user):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    async with pool.acquire() as db:
 
-        cursor = await db.execute(
-
-            "SELECT MAX(application_number) FROM users"
-
+        last_application = await db.fetchval(
+            """
+            SELECT MAX(application_number)
+            FROM users
+            """
         )
 
-        result = await cursor.fetchone()
 
-        if result[0] is None:
+        if last_application is None:
             application = 12584
         else:
-            application = result[0] + 1
+            application = last_application + 1
 
-        await db.execute("""
 
-        INSERT INTO users(
+        await db.execute(
+            """
+            INSERT INTO users(
 
-            telegram_id,
-            first_name,
-            last_name,
-            username,
-            language,
-            application_number,
-            created_at
+                telegram_id,
+                first_name,
+                last_name,
+                username,
+                language,
+                application_number,
+                created_at
 
-        )
+            )
 
-        VALUES(?,?,?,?,?,?,?)
-
-        """,
-
-        (
+            VALUES(
+                $1,$2,$3,$4,$5,$6,$7
+            )
+            """,
 
             user.id,
             user.first_name,
@@ -108,13 +118,11 @@ async def create_user(user):
             user.username,
             "ar",
             application,
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
 
         )
-
-        )
-
-        await db.commit()
 
 
 # ==========================
@@ -123,19 +131,23 @@ async def create_user(user):
 
 async def get_user(user_id):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    async with pool.acquire() as db:
 
-        cursor = await db.execute(
-            "SELECT * FROM users WHERE telegram_id=?",
-            (user_id,)
+        user = await db.fetchrow(
+            """
+            SELECT *
+            FROM users
+            WHERE telegram_id=$1
+            """,
+            user_id
         )
 
-        user = await cursor.fetchone()
 
         print(
             "GET USER:",
             user
         )
+
 
         return user
 
@@ -146,23 +158,22 @@ async def get_user(user_id):
 
 async def get_language(user_id):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    async with pool.acquire() as db:
 
-        cursor = await db.execute(
-
-            "SELECT language FROM users WHERE telegram_id=?",
-
-            (user_id,)
-
+        lang = await db.fetchval(
+            """
+            SELECT language
+            FROM users
+            WHERE telegram_id=$1
+            """,
+            user_id
         )
 
-        result = await cursor.fetchone()
 
-        if result:
-            return result[0]
+        if lang:
+            return lang
 
         return "ar"
-
 
 
 # ==========================
@@ -171,121 +182,96 @@ async def get_language(user_id):
 
 async def set_language(user_id, lang):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    async with pool.acquire() as db:
 
         await db.execute(
-
-            "UPDATE users SET language=? WHERE telegram_id=?",
-
-            (
-
-                lang,
-                user_id
-
-            )
-
+            """
+            UPDATE users
+            SET language=$1
+            WHERE telegram_id=$2
+            """,
+            lang,
+            user_id
         )
-
-        await db.commit()
 
 
 # ==========================
-# Телефон
+# Сохранить телефон
 # ==========================
 
 async def save_phone(user_id, phone):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    async with pool.acquire() as db:
 
         await db.execute(
-
-            "UPDATE users SET phone=? WHERE telegram_id=?",
-
-            (
-
-                phone,
-                user_id
-
-            )
-
+            """
+            UPDATE users
+            SET phone=$1
+            WHERE telegram_id=$2
+            """,
+            phone,
+            user_id
         )
-
-        await db.commit()
 
 
 # ==========================
-# Передняя сторона
+# Сохранить переднюю сторону
 # ==========================
 
 async def save_front(user_id, file_id):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    async with pool.acquire() as db:
 
         await db.execute(
-
-            "UPDATE users SET front_photo=? WHERE telegram_id=?",
-
-            (
-
-                file_id,
-                user_id
-
-            )
-
+            """
+            UPDATE users
+            SET front_photo=$1
+            WHERE telegram_id=$2
+            """,
+            file_id,
+            user_id
         )
-
-        await db.commit()
 
 
 # ==========================
-# Задняя сторона
+# Сохранить заднюю сторону
 # ==========================
 
 async def save_back(user_id, file_id):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    async with pool.acquire() as db:
 
         await db.execute(
-
-            "UPDATE users SET back_photo=? WHERE telegram_id=?",
-
-            (
-
-                file_id,
-                user_id
-
-            )
-
+            """
+            UPDATE users
+            SET back_photo=$1
+            WHERE telegram_id=$2
+            """,
+            file_id,
+            user_id
         )
 
-        await db.commit()
-
-
 # ==========================
-# Селфи
+# Сохранить селфи
 # ==========================
 
 async def save_selfie(user_id, file_id):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    async with pool.acquire() as db:
 
-        cursor = await db.execute(
+        result = await db.execute(
             """
-            UPDATE users 
-            SET selfie_photo=? 
-            WHERE telegram_id=?
+            UPDATE users
+            SET selfie_photo=$1
+            WHERE telegram_id=$2
             """,
-            (
-                file_id,
-                user_id
-            )
+            file_id,
+            user_id
         )
-
-        await db.commit()
 
         print(
             "SELFIE UPDATED:",
-            cursor.rowcount
+            result
         )
 
 
@@ -295,22 +281,17 @@ async def save_selfie(user_id, file_id):
 
 async def set_status(user_id, status):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    async with pool.acquire() as db:
 
         await db.execute(
-
-            "UPDATE users SET status=? WHERE telegram_id=?",
-
-            (
-
-                status,
-                user_id
-
-            )
-
+            """
+            UPDATE users
+            SET status=$1
+            WHERE telegram_id=$2
+            """,
+            status,
+            user_id
         )
-
-        await db.commit()
 
 
 # ==========================
@@ -319,42 +300,38 @@ async def set_status(user_id, status):
 
 async def approve_user(user_id):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    async with pool.acquire() as db:
 
-        # ищем последний номер очереди
-        cursor = await db.execute(
+        last_queue = await db.fetchval(
             """
             SELECT MAX(queue_number)
             FROM users
             """
         )
 
-        result = await cursor.fetchone()
 
-        if result[0] is None:
+        if last_queue is None:
             queue_number = 301
         else:
-            queue_number = result[0] + 1
+            queue_number = last_queue + 1
 
 
         await db.execute(
             """
             UPDATE users
-            SET status = ?,
-                queue_number = ?
-            WHERE telegram_id = ?
+            SET
+                status=$1,
+                queue_number=$2
+            WHERE telegram_id=$3
             """,
-            (
-                "approved",
-                queue_number,
-                user_id
-            )
+            "approved",
+            queue_number,
+            user_id
         )
-
-        await db.commit()
 
 
     return queue_number
+
 
 
 # ==========================
@@ -363,35 +340,27 @@ async def approve_user(user_id):
 
 async def reject_user(user_id):
 
-    async with aiosqlite.connect(DATABASE) as db:
+    async with pool.acquire() as db:
 
-        await db.execute("""
+        await db.execute(
+            """
+            UPDATE users
 
-        UPDATE users
+            SET
 
-        SET
+                status='rejected',
 
-        status='rejected',
+                front_photo=NULL,
 
-        front_photo=NULL,
+                back_photo=NULL,
 
-        back_photo=NULL,
+                selfie_photo=NULL
 
-        selfie_photo=NULL
+            WHERE telegram_id=$1
 
-        WHERE telegram_id=?
-
-        """,
-
-        (
-
-            user_id,
-
+            """,
+            user_id
         )
-
-        )
-
-        await db.commit()
 
 
 # ==========================
@@ -400,15 +369,18 @@ async def reject_user(user_id):
 
 async def get_all_users():
 
-    async with aiosqlite.connect(DATABASE) as db:
+    async with pool.acquire() as db:
 
-        cursor = await db.execute(
-
-            "SELECT * FROM users ORDER BY application_number"
-
+        users = await db.fetch(
+            """
+            SELECT *
+            FROM users
+            ORDER BY application_number
+            """
         )
 
-        return await cursor.fetchall()
+        return users
+
 
 
 # ==========================
@@ -417,34 +389,45 @@ async def get_all_users():
 
 async def get_users_count():
 
-    async with aiosqlite.connect(DATABASE) as db:
+    async with pool.acquire() as db:
 
-        cursor = await db.execute(
-
-            "SELECT COUNT(*) FROM users"
-
+        count = await db.fetchval(
+            """
+            SELECT COUNT(*)
+            FROM users
+            """
         )
 
-        result = await cursor.fetchone()
+        return count
 
-        return result[0]
+
+
+# ==========================
+# Одобренные пользователи
+# ==========================
 
 async def get_approved_users():
 
-    async with aiosqlite.connect(DATABASE) as db:
+    async with pool.acquire() as db:
 
-        cursor = await db.execute("""
-        SELECT
-            first_name,
-            last_name,
-            phone,
-            queue_number,
-            application_number,
-            status
-        FROM users
-        ORDER BY
-            queue_number ASC,
-            application_number ASC
-        """)
+        users = await db.fetch(
+            """
+            SELECT
 
-        return await cursor.fetchall()
+                first_name,
+                last_name,
+                phone,
+                queue_number,
+                application_number,
+                status
+
+            FROM users
+
+            ORDER BY
+                queue_number ASC,
+                application_number ASC
+
+            """
+        )
+
+        return users

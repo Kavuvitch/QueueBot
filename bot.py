@@ -4,7 +4,7 @@ from aiogram import Bot, Dispatcher
 
 from config import BOT_TOKEN
 
-from database import init_db
+import database
 
 
 # handlers
@@ -15,64 +15,67 @@ from handlers.admin import router as admin_router
 from handlers.language import router as language_router
 
 
+
 async def main():
 
-    # создаем базу данных
+    # подключаем PostgreSQL и создаём таблицу
 
-    await init_db()
+    await database.init_db()
 
 
-    # создаем бота
+    # создаём бота
 
     bot = Bot(
-
         token=BOT_TOKEN
-
     )
 
 
-    # диспетчер
+    # создаём диспетчер
 
     dp = Dispatcher()
 
 
-    # подключаем обработчики
+    # подключаем роутеры
 
     dp.include_router(
-
         start_router
-
     )
 
     dp.include_router(
-
         registration_router
-
     )
 
     dp.include_router(
-
         admin_router
-
     )
 
     dp.include_router(
-
         language_router
-
     )
 
 
     print("Bot started")
 
 
-    # запуск
+    try:
 
-    await dp.start_polling(
+        await dp.start_polling(
+            bot
+        )
 
-        bot
 
-    )
+    finally:
+
+        # закрываем соединение Telegram
+
+        await bot.session.close()
+
+
+        # закрываем PostgreSQL
+
+        if database.pool:
+
+            await database.pool.close()
 
 
 
