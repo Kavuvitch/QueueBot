@@ -14,7 +14,7 @@ from handlers.registration import router as registration_router
 from handlers.admin import router as admin_router
 from handlers.language import router as language_router
 
-
+print("TEST RAILWAY")
 
 async def main():
 
