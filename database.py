@@ -428,3 +428,23 @@ async def get_users_count():
         result = await cursor.fetchone()
 
         return result[0]
+
+async def get_approved_users():
+
+    async with aiosqlite.connect(DATABASE) as db:
+
+        cursor = await db.execute("""
+        SELECT
+            first_name,
+            last_name,
+            phone,
+            queue_number,
+            application_number,
+            status
+        FROM users
+        ORDER BY
+            queue_number ASC,
+            application_number ASC
+        """)
+
+        return await cursor.fetchall()

@@ -6,10 +6,12 @@ from database import (
     reject_user,
     get_user
 )
-
+from aiogram.filters import Command
+from aiogram.types import Message, FSInputFile
 from texts import TEXTS
 
 from config import ADMIN_IDS
+from database import get_approved_users
 
 
 router = Router()
@@ -177,3 +179,50 @@ async def reject_application(
         "Заявка отклонена"
 
     )
+
+@router.message(Command("backup"))
+async def backup_database(message: Message):
+
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("⛔ Access denied.")
+        return
+
+    await message.answer_document(
+        FSInputFile("users.db"),
+        caption="📦 Database backup"
+    )
+
+@router.message(Command("users"))
+async def users_list(message: Message):
+
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
+    users = await get_approved_users()
+
+    if not users:
+        await message.answer("База данных пуста.")
+        return
+
+    text = "📋 Список пользователей\n\n"
+
+    for user in users:
+
+        first_name = user[0] or ""
+        last_name = user[1] or ""
+        phone = user[2] or "Нет номера"
+        queue = user[3] or "-"
+        application = user[4]
+        status = user[5]
+
+        text += (
+            f"👤 {first_name} {last_name}\n"
+            f"📞 {phone}\n"
+            f"📄 Заявка: {application}\n"
+            f"🔢 Очередь: {queue}\n"
+            f"📌 Статус: {status}\n\n"
+        )
+
+    # Telegram ограничивает сообщение 4096 символами
+    for i in range(0, len(text), 4000):
+        await message.answer(text[i:i+4000])
